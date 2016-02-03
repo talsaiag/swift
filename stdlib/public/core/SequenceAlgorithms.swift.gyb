@@ -1,8 +1,8 @@
-//===--- SequenceAlgorithms.swift.gyb -------------------------------------===//
+//===--- SequenceAlgorithms.swift.gyb -------------------------*- swift -*-===//
 //
 // This source file is part of the Swift.org open source project
 //
-// Copyright (c) 2014 - 2015 Apple Inc. and the Swift project authors
+// Copyright (c) 2014 - 2016 Apple Inc. and the Swift project authors
 // Licensed under Apache License v2.0 with Runtime Library Exception
 //
 // See http://swift.org/LICENSE.txt for license information
@@ -53,7 +53,7 @@ extension SequenceType {
 if preds:
   orderingRequirement = """
   /// - Requires: `isOrderedBefore` is a
-  ///   [strict weak ordering](http://en.wikipedia.org/wiki/Strict_weak_order#Strict_weak_orderings).
+  ///   [strict weak ordering](http://en.wikipedia.org/wiki/Strict_weak_order#Strict_weak_orderings)
   ///   over `self`."""
   rethrows_ = "rethrows "
 else:
@@ -74,19 +74,16 @@ extension SequenceType ${"" if preds else "where Generator.Element : Comparable"
     @noescape isOrderedBefore: (${GElement}, ${GElement}) throws -> Bool
 %   end
   ) ${rethrows_}-> ${GElement}? {
-    var minResult: ${GElement}? = nil
-    for e in GeneratorSequence(generate()) {
-      if let currentMinResult = minResult {
+    var g = generate()
+    guard var result = g.next() else { return nil }
+    for e in GeneratorSequence(g) {
 %   if preds:
-        if try isOrderedBefore(e, currentMinResult) { minResult = e }
+      if try isOrderedBefore(e, result) { result = e }
 %   else:
-      if e < currentMinResult { minResult = e }
+      if e < result { result = e }
 %   end
-      } else {
-        minResult = e
-      }
     }
-    return minResult
+    return result
   }
 
   /// Returns the maximum element in `self` or `nil` if the sequence is empty.
@@ -99,19 +96,16 @@ extension SequenceType ${"" if preds else "where Generator.Element : Comparable"
     @noescape isOrderedBefore: (${GElement}, ${GElement}) throws -> Bool
 %   end
   ) ${rethrows_}-> ${GElement}? {
-    var maxResult: ${GElement}? = nil
-    for e in GeneratorSequence(generate()) {
-      if let currentMaxResult = maxResult {
+    var g = generate()
+    guard var result = g.next() else { return nil }
+    for e in GeneratorSequence(g) {
 %   if preds:
-        if try isOrderedBefore(currentMaxResult, e) { maxResult = e }
+      if try isOrderedBefore(result, e) { result = e }
 %   else:
-        if e > currentMaxResult { maxResult = e }
+      if e > result { result = e }
 %   end
-      } else {
-        maxResult = e
-      }
     }
-    return maxResult
+    return result
   }
 }
 
@@ -285,7 +279,7 @@ else:
           if ${"try isOrderedBefore(e2, e1)" if preds else "e2 < e1"} {
             return false
           }
-          continue // equivalent
+          continue // Equivalent
         }
         return false
       }

@@ -2,7 +2,7 @@
 //
 // This source file is part of the Swift.org open source project
 //
-// Copyright (c) 2014 - 2015 Apple Inc. and the Swift project authors
+// Copyright (c) 2014 - 2016 Apple Inc. and the Swift project authors
 // Licensed under Apache License v2.0 with Runtime Library Exception
 //
 // See http://swift.org/LICENSE.txt for license information
@@ -28,14 +28,17 @@ const std::vector<std::string> LangOptions::SupportedOSBuildConfigArguments = {
   "tvOS",
   "watchOS",
   "iOS",
-  "Linux"
+  "Linux",
+  "FreeBSD"
 };
 
 const std::vector<std::string> LangOptions::SupportedArchBuildConfigArguments = {
   "arm",
   "arm64",
   "i386",
-  "x86_64"
+  "x86_64",
+  "powerpc64",
+  "powerpc64le"
 };
 
 bool LangOptions::isOSBuildConfigSupported(llvm::StringRef OSName) {
@@ -98,6 +101,8 @@ std::pair<bool, bool> LangOptions::setTarget(llvm::Triple triple) {
     addTargetConfigOption("os", "iOS");
   else if (triple.isOSLinux())
     addTargetConfigOption("os", "Linux");
+  else if (triple.isOSFreeBSD())
+    addTargetConfigOption("os", "FreeBSD");
   else {
     UnsupportedOS = true;
   }
@@ -111,6 +116,12 @@ std::pair<bool, bool> LangOptions::setTarget(llvm::Triple triple) {
     break;
   case llvm::Triple::ArchType::aarch64:
     addTargetConfigOption("arch", "arm64");
+    break;
+  case llvm::Triple::ArchType::ppc64:
+    addTargetConfigOption("arch", "powerpc64");
+    break;
+  case llvm::Triple::ArchType::ppc64le:
+    addTargetConfigOption("arch", "powerpc64le");
     break;
   case llvm::Triple::ArchType::x86:
     addTargetConfigOption("arch", "i386");

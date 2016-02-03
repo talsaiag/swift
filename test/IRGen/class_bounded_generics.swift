@@ -56,8 +56,8 @@ class ClassProtocolFieldClass {
 }
 
 // CHECK: %C22class_bounded_generics22ClassGenericFieldClass = type <{ %swift.refcounted, %Si, %objc_object*, %Si }>
-// CHECK: %V22class_bounded_generics24ClassProtocolFieldStruct = type <{ %Si, %P22class_bounded_generics10ClassBound_, %Si }>
 // CHECK: %V22class_bounded_generics23ClassGenericFieldStruct = type <{ %Si, %objc_object*, %Si }>
+// CHECK: %V22class_bounded_generics24ClassProtocolFieldStruct = type <{ %Si, %P22class_bounded_generics10ClassBound_, %Si }>
 
 // CHECK-LABEL: define hidden %objc_object* @_TF22class_bounded_generics23class_bounded_archetype{{.*}}(%objc_object*, %swift.type* %T, i8** %T.ClassBound)
 func class_bounded_archetype<T : ClassBound>(x: T) -> T {
@@ -93,7 +93,7 @@ func class_bounded_archetype_method<T : ClassBoundBinary>(x: T, y: T) {
   x.classBoundBinaryMethod(y)
   // CHECK: [[WITNESS_ENTRY:%.*]] = getelementptr inbounds i8*, i8** %T.ClassBoundBinary, i32 1
   // CHECK: [[WITNESS:%.*]] = load i8*, i8** [[WITNESS_ENTRY]], align 8
-  // CHECK: call void bitcast (void (%swift.refcounted*)* @swift_unknownRetain to void (%objc_object*)*)(%objc_object* [[Y:%.*]])
+  // CHECK: call void @swift_unknownRetain(%objc_object* [[Y:%.*]])
   // CHECK: [[WITNESS_FUNC:%.*]] = bitcast i8* [[WITNESS]] to void (%objc_object*, %objc_object*, %swift.type*)
   // CHECK: call void [[WITNESS_FUNC]](%objc_object* [[Y]], %objc_object* %0, %swift.type* {{.*}})
 }
@@ -257,6 +257,6 @@ func class_bounded_metatype<T: SomeSwiftClass>(t : T) {
   t.dynamicType.foo()
 }
 
-class WeakRef<T: AnyObject>  {
+class WeakRef<T: AnyObject> {
   weak var value: T?
 }

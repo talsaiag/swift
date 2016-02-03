@@ -2,7 +2,7 @@
 //
 // This source file is part of the Swift.org open source project
 //
-// Copyright (c) 2014 - 2015 Apple Inc. and the Swift project authors
+// Copyright (c) 2014 - 2016 Apple Inc. and the Swift project authors
 // Licensed under Apache License v2.0 with Runtime Library Exception
 //
 // See http://swift.org/LICENSE.txt for license information
@@ -176,7 +176,7 @@ private:
   void visitPotentialArchetypes(F f);
 
 public:
-  /// Construct a new archtype builder.
+  /// Construct a new archetype builder.
   ///
   /// \param mod The module in which the builder will create archetypes.
   ///
@@ -218,6 +218,12 @@ public:
   /// \returns true if an error occurred, false otherwise.
   bool addGenericParameter(GenericTypeParamDecl *GenericParam);
 
+  /// Add the requirements placed on the given abstract type parameter
+  /// to the given potential archetype.
+  ///
+  /// \returns true if an error occurred, false otherwise.
+  bool addGenericParameterRequirements(GenericTypeParamDecl *GenericParam);
+
   /// \brief Add a new generic parameter for which there may be requirements.
   ///
   /// \returns true if an error occurred, false otherwise.
@@ -244,6 +250,14 @@ public:
   /// \returns true if an error occurred, false otherwise.
   bool addGenericSignature(GenericSignature *sig, bool adoptArchetypes,
                            bool treatRequirementsAsExplicit = false);
+
+  /// \brief Get a generic signature based on the provided complete list
+  /// of generic parameter types.
+  ///
+  /// \returns a generic signature build based on the provided list of
+  ///          generic parameter types.
+  GenericSignature *
+  getGenericSignature(ArrayRef<GenericTypeParamType *> genericParamsTypes);
 
   /// Infer requirements from the given type, recursively.
   ///
@@ -275,12 +289,12 @@ public:
   /// because the type \c Dictionary<K,V> cannot be formed without it.
   ///
   /// \returns true if an error occurred, false otherwise.
-  bool inferRequirements(Pattern *pattern, GenericParamList *genericParams);
+  bool inferRequirements(ParameterList *params,GenericParamList *genericParams);
 
   /// Finalize the set of requirements, performing any remaining checking
   /// required before generating archetypes.
   ///
-  /// \returns true if an error occurs, false otherwse.
+  /// \returns true if an error occurs, false otherwise.
   bool finalize(SourceLoc loc);
 
   /// \brief Resolve the given type to the potential archetype it names.
@@ -310,6 +324,24 @@ public:
   /// list.
   ArrayRef<ArchetypeType *> getAllArchetypes();
   
+  /// Map an interface type to a contextual type.
+  static Type mapTypeIntoContext(DeclContext *dc, Type type,
+                                 LazyResolver *resolver = nullptr);
+
+  /// Map an interface type to a contextual type.
+  static Type mapTypeIntoContext(ModuleDecl *M,
+                                 GenericParamList *genericParams,
+                                 Type type,
+                                 LazyResolver *resolver = nullptr);
+
+  /// Map a contextual type to an interface type.
+  static Type mapTypeOutOfContext(DeclContext *dc, Type type);
+
+  /// Map a contextual type to an interface type.
+  static Type mapTypeOutOfContext(ModuleDecl *M,
+                                  GenericParamList *genericParams,
+                                  Type type);
+
   using SameTypeRequirement
     = std::pair<PotentialArchetype *,
                 PointerUnion<Type, PotentialArchetype*>>;
@@ -321,18 +353,6 @@ public:
   // FIXME: Compute the set of 'extra' witness tables needed to express this
   // requirement set.
 
-  /// Map the given type, which is based on an interface type and may therefore
-  /// be dependent, to a type based on the archetypes of the given declaration
-  /// context.
-  ///
-  /// \param dc The declaration context in which we should perform the mapping.
-  /// \param type The type to map into the given declaration context.
-  ///
-  /// \returns the mapped type, which will involve archetypes rather than
-  /// dependent types.
-  static Type mapTypeIntoContext(DeclContext *dc, Type type,
-                                 LazyResolver *resolver = nullptr);
-  
   /// \brief Dump all of the requirements, both specified and inferred.
   LLVM_ATTRIBUTE_DEPRECATED(
       void dump(),
@@ -340,12 +360,6 @@ public:
 
   /// Dump all of the requirements to the given output stream.
   void dump(llvm::raw_ostream &out);
-
-  /// FIXME: Share the guts of our mapTypeIntoContext implementation with
-  static Type mapTypeIntoContext(ModuleDecl *M,
-                                 GenericParamList *genericParams,
-                                 Type type,
-                                 LazyResolver *resolver = nullptr);
 
   // In SILFunction.cpp:
   

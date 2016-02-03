@@ -2,7 +2,7 @@
 //
 // This source file is part of the Swift.org open source project
 //
-// Copyright (c) 2014 - 2015 Apple Inc. and the Swift project authors
+// Copyright (c) 2014 - 2016 Apple Inc. and the Swift project authors
 // Licensed under Apache License v2.0 with Runtime Library Exception
 //
 // See http://swift.org/LICENSE.txt for license information
@@ -1051,6 +1051,7 @@ static Accessibility inferAccessibility(const ValueDecl *D) {
   case DeclContextKind::Initializer:
   case DeclContextKind::TopLevelCodeDecl:
   case DeclContextKind::AbstractFunctionDecl:
+  case DeclContextKind::SubscriptDecl:
     return Accessibility::Private;
   case DeclContextKind::Module:
   case DeclContextKind::FileUnit:
@@ -1129,7 +1130,7 @@ std::vector<UIdent> UIDsFromDeclAttributes(const DeclAttributes &Attrs) {
       continue;
     }
 
-    // We handle accessibility explicitely.
+    // We handle accessibility explicitly.
     case DAK_Accessibility:
     case DAK_SetterAccessibility:
       continue;
@@ -1641,7 +1642,8 @@ public:
         // }
         if (auto VD = dyn_cast_or_null<VarDecl>(Cursor->getAsDecl())) {
           if (auto Getter = VD->getGetter()) {
-            if (Getter->getAccessorKeywordLoc().isInvalid()) {
+            if (!Getter->isImplicit() &&
+                Getter->getAccessorKeywordLoc().isInvalid()) {
               LineAndColumn = ParentLineAndColumn;
               continue;
             }
@@ -1783,7 +1785,7 @@ public:
         SM.getLineAndColumn(If->getElseLoc()).first == Line)
       return false;
 
-    // If we're in an DoCatchStmt and at a 'catch', don't add an indent.
+    // If we're in a DoCatchStmt and at a 'catch', don't add an indent.
     if (auto *DoCatchS = dyn_cast_or_null<DoCatchStmt>(Cursor->getAsStmt())) {
       for (CatchStmt *CatchS : DoCatchS->getCatches()) {
         SourceLoc Loc = CatchS->getCatchLoc();
@@ -1837,7 +1839,7 @@ class FormatWalker: public ide::SourceEntityWalker {
     SourceLoc &TargetLoc;
     TokenIt TI;
 
-    bool isImmediateAfterSeparator(SourceLoc End, tok Seperator) {
+    bool isImmediateAfterSeparator(SourceLoc End, tok Separator) {
       auto BeforeE = [&]() {
         return TI != Tokens.end() &&
                !SM.isBeforeInBuffer(End, TI->getLoc());
@@ -1845,7 +1847,7 @@ class FormatWalker: public ide::SourceEntityWalker {
       if (!BeforeE())
         return false;
       for (; BeforeE(); TI ++);
-      if (TI == Tokens.end() || TI->getKind() != Seperator)
+      if (TI == Tokens.end() || TI->getKind() != Separator)
         return false;
       auto SeparatorLoc = TI->getLoc();
       TI ++;
@@ -1893,8 +1895,11 @@ class FormatWalker: public ide::SourceEntityWalker {
         // Trailing closures are not considered siblings to other args.
         unsigned EndAdjust = TE->hasTrailingClosure() ? 1 : 0;
         for (unsigned I = 0, N = TE->getNumElements() - EndAdjust; I < N; I ++) {
-          addPair(TE->getElement(I)->getEndLoc(),
-                  FindAlignLoc(TE->getElement(I)->getStartLoc()), tok::comma);
+          auto EleStart = TE->getElementNameLoc(I);
+          if (EleStart.isInvalid()) {
+            EleStart = TE->getElement(I)->getStartLoc();
+          }
+          addPair(TE->getElement(I)->getEndLoc(), FindAlignLoc(EleStart), tok::comma);
         }
       }
 
@@ -1910,12 +1915,11 @@ class FormatWalker: public ide::SourceEntityWalker {
         }
 
         // Function parameters are siblings.
-        for (auto P : AFD->getBodyParamPatterns()) {
-          if (auto TU = dyn_cast<TuplePattern>(P)) {
-            for (unsigned I = 0, N = TU->getNumElements(); I < N; I ++) {
-              addPair(TU->getElement(I).getPattern()->getEndLoc(),
-                      FindAlignLoc(TU->getElement(I).getLabelLoc()), tok::comma);
-            }
+        for (auto P : AFD->getParameterLists()) {
+          for (auto param : *P) {
+           if (!param->isSelfParameter())
+              addPair(param->getEndLoc(), FindAlignLoc(param->getStartLoc()),
+                      tok::comma);
           }
         }
       }
@@ -1925,6 +1929,13 @@ class FormatWalker: public ide::SourceEntityWalker {
         for (unsigned I = 0, N = AE->getNumElements(); I < N;  I ++) {
           addPair(AE->getElement(I)->getEndLoc(),
                   FindAlignLoc(AE->getElement(I)->getStartLoc()), tok::comma);
+        }
+      }
+
+      // Case label items in a case statement are siblings.
+      if (auto CS = dyn_cast_or_null<CaseStmt>(Node.dyn_cast<Stmt *>())) {
+        for(const CaseLabelItem& Item : CS->getCaseLabelItems()) {
+          addPair(Item.getEndLoc(), FindAlignLoc(Item.getStartLoc()), tok::comma);
         }
       }
     };
@@ -2437,7 +2448,7 @@ ImmutableTextSnapshotRef SwiftEditorDocument::replaceText(
 }
 
 void SwiftEditorDocument::updateSemaInfo() {
-  if (auto SemaInfo = Impl.SemanticInfo) {
+  if (Impl.SemanticInfo) {
     Impl.SemanticInfo->processLatestSnapshotAsync(Impl.EditableBuffer);
   }
 }
@@ -2594,6 +2605,13 @@ void SwiftEditorDocument::formatText(unsigned Line, unsigned Length,
   Consumer.recordAffectedLineRange(LineRange.startLine(), LineRange.lineCount());
 }
 
+bool isReturningVoid(SourceManager &SM, CharSourceRange Range) {
+  if (Range.isInvalid())
+    return false;
+  StringRef Text = SM.extractText(Range);
+  return "()" == Text || "Void" == Text;
+}
+
 void SwiftEditorDocument::expandPlaceholder(unsigned Offset, unsigned Length,
                                             EditorConsumer &Consumer) {
   auto SyntaxInfo = Impl.getSyntaxInfo();
@@ -2656,7 +2674,7 @@ void SwiftEditorDocument::expandPlaceholder(unsigned Offset, unsigned Length,
               // For example:
               // foo.bar(a, <#closure#>) turns into foo.bar(a) <#closure#>.
 
-              // If the preceeding token in the call is the leading parameter
+              // If the preceding token in the call is the leading parameter
               // separator, we'll expand replacement to cover that.
               assert(Elems.size() > 1);
               SourceLoc BeforeLoc = Lexer::getLocForEndOfToken(SM,
@@ -2672,8 +2690,7 @@ void SwiftEditorDocument::expandPlaceholder(unsigned Offset, unsigned Length,
 
         OS << "{ ";
 
-        bool ReturningVoid = ClosureReturnTypeRange.isValid() &&
-                             "Void" == SM.extractText(ClosureReturnTypeRange);
+        bool ReturningVoid = isReturningVoid(SM, ClosureReturnTypeRange);
 
         bool HasSignature = !ClosureParams.empty() ||
                             (ClosureReturnTypeRange.isValid() && !ReturningVoid);
@@ -2801,9 +2818,9 @@ void SwiftEditorDocument::reportDocumentStructure(swift::SourceFile &SrcFile,
   ModelContext.walk(Walker);
 }
 
-//============================================================================//
+//===----------------------------------------------------------------------===//
 // EditorOpen
-//============================================================================//
+//===----------------------------------------------------------------------===//
 
 void SwiftLangSupport::editorOpen(StringRef Name, llvm::MemoryBuffer *Buf,
                                   bool EnableSyntaxMap,
@@ -2819,7 +2836,7 @@ void SwiftLangSupport::editorOpen(StringRef Name, llvm::MemoryBuffer *Buf,
     EditorDoc->parse(Snapshot, *this);
     if (EditorDocuments.getOrUpdate(Name, *this, EditorDoc)) {
       // Document already exists, re-initialize it. This should only happen
-      // if we get OPEN request while the prevous document is not closed.
+      // if we get OPEN request while the previous document is not closed.
       LOG_WARN_FUNC("Document already exists in editorOpen(..): " << Name);
       Snapshot = nullptr;
     }
@@ -2839,9 +2856,9 @@ void SwiftLangSupport::editorOpen(StringRef Name, llvm::MemoryBuffer *Buf,
 }
 
 
-//============================================================================//
+//===----------------------------------------------------------------------===//
 // EditorClose
-//============================================================================//
+//===----------------------------------------------------------------------===//
 
 void SwiftLangSupport::editorClose(StringRef Name, bool RemoveCache) {
   auto Removed = EditorDocuments.remove(Name);
@@ -2853,9 +2870,9 @@ void SwiftLangSupport::editorClose(StringRef Name, bool RemoveCache) {
 }
 
 
-//============================================================================//
+//===----------------------------------------------------------------------===//
 // EditorReplaceText
-//============================================================================//
+//===----------------------------------------------------------------------===//
 
 void SwiftLangSupport::editorReplaceText(StringRef Name, llvm::MemoryBuffer *Buf,
                                          unsigned Offset, unsigned Length,
@@ -2881,9 +2898,9 @@ void SwiftLangSupport::editorReplaceText(StringRef Name, llvm::MemoryBuffer *Buf
 }
 
 
-//============================================================================//
+//===----------------------------------------------------------------------===//
 // EditorFormatText
-//============================================================================//
+//===----------------------------------------------------------------------===//
 void SwiftLangSupport::editorApplyFormatOptions(StringRef Name,
                                                 OptionsDictionary &FmtOptions) {
   auto EditorDoc = EditorDocuments.getByUnresolvedName(Name);
@@ -2908,9 +2925,9 @@ void SwiftLangSupport::editorExtractTextFromComment(StringRef Source,
   Consumer.handleSourceText(extractPlainTextFromComment(Source));
 }
 
-//============================================================================//
+//===----------------------------------------------------------------------===//
 // EditorExpandPlaceholder
-//============================================================================//
+//===----------------------------------------------------------------------===//
 void SwiftLangSupport::editorExpandPlaceholder(StringRef Name, unsigned Offset,
                                                unsigned Length,
                                                EditorConsumer &Consumer) {

@@ -2,7 +2,7 @@
 //
 // This source file is part of the Swift.org open source project
 //
-// Copyright (c) 2014 - 2015 Apple Inc. and the Swift project authors
+// Copyright (c) 2014 - 2016 Apple Inc. and the Swift project authors
 // Licensed under Apache License v2.0 with Runtime Library Exception
 //
 // See http://swift.org/LICENSE.txt for license information
@@ -20,6 +20,7 @@ namespace swift {
 class GenericParamList;
 class CanType;
 class ExtensionDecl;
+class NominalTypeDecl;
 class TypeBase;
 class DeclContext;
 class Type;
@@ -205,6 +206,8 @@ struct PrintOptions {
 
   std::shared_ptr<PrinterArchetypeTransformer> pTransformer;
 
+  NominalTypeDecl *SynthesizedTarget = nullptr;
+
   /// Retrieve the set of options for verbose printing to users.
   static PrintOptions printVerbose() {
     PrintOptions result;
@@ -229,6 +232,7 @@ struct PrintOptions {
     result.ExcludeAttrList.push_back(DAK_Exported);
     result.ExcludeAttrList.push_back(DAK_Inline);
     result.ExcludeAttrList.push_back(DAK_Rethrows);
+    result.ExcludeAttrList.push_back(DAK_Swift3Migration);
     result.PrintOverrideKeyword = false;
     result.AccessibilityFilter = Accessibility::Public;
     result.PrintIfConfig = false;
@@ -245,9 +249,15 @@ struct PrintOptions {
     return result;
   }
 
-  static PrintOptions printTypeInterface(Type T, DeclContext *DC);
+  static PrintOptions printTypeInterface(Type T, const DeclContext *DC);
 
-  /// Retrive the print options that are suitable to print the testable interface.
+  void setArchetypeTransform(Type T, const DeclContext *DC);
+
+  void initArchetypeTransformerForSynthesizedExtensions(NominalTypeDecl *D);
+
+  void clearArchetypeTransformerForSynthesizedExtensions();
+
+  /// Retrieve the print options that are suitable to print the testable interface.
   static PrintOptions printTestableInterface() {
     PrintOptions result = printInterface();
     result.AccessibilityFilter = Accessibility::Internal;
@@ -270,6 +280,7 @@ struct PrintOptions {
     result.PrintAccessibility = false;
     result.SkipUnavailable = false;
     result.ExcludeAttrList.push_back(DAK_Available);
+    result.ExcludeAttrList.push_back(DAK_Swift3Migration);
     result.ArgAndParamPrinting =
       PrintOptions::ArgAndParamPrintingMode::BothAlways;
     result.PrintDocumentationComments = false;
@@ -312,6 +323,7 @@ struct PrintOptions {
     PO.PrintFunctionRepresentationAttrs = false;
     PO.PrintDocumentationComments = false;
     PO.ExcludeAttrList.push_back(DAK_Available);
+    PO.ExcludeAttrList.push_back(DAK_Swift3Migration);
     PO.SkipPrivateStdlibDecls = true;
     return PO;
   }

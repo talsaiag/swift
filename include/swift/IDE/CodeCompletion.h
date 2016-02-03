@@ -1,8 +1,8 @@
-//===- CodeCompletion.h - Routines for code completion --------------------===//
+//===--- CodeCompletion.h - Routines for code completion --------*- C++ -*-===//
 //
 // This source file is part of the Swift.org open source project
 //
-// Copyright (c) 2014 - 2015 Apple Inc. and the Swift project authors
+// Copyright (c) 2014 - 2016 Apple Inc. and the Swift project authors
 // Licensed under Apache License v2.0 with Runtime Library Exception
 //
 // See http://swift.org/LICENSE.txt for license information
@@ -266,13 +266,13 @@ public:
     }
 
     static Chunk createWithText(ChunkKind Kind, unsigned NestingLevel,
-                                StringRef Text, bool isAnnoation = false) {
-      return Chunk(Kind, NestingLevel, Text, isAnnoation);
+                                StringRef Text, bool isAnnotation = false) {
+      return Chunk(Kind, NestingLevel, Text, isAnnotation);
     }
 
     static Chunk createSimple(ChunkKind Kind, unsigned NestingLevel,
-                              bool isAnnoation = false) {
-      return Chunk(Kind, NestingLevel, isAnnoation);
+                              bool isAnnotation = false) {
+      return Chunk(Kind, NestingLevel, isAnnotation);
     }
   };
 
@@ -387,6 +387,7 @@ enum class CodeCompletionDeclKind {
   Enum,
   EnumElement,
   Protocol,
+  AssociatedType,
   TypeAlias,
   GenericTypeParam,
   Constructor,
@@ -409,8 +410,8 @@ enum class CodeCompletionLiteralKind {
   BooleanLiteral,
   ColorLiteral,
   DictionaryLiteral,
-  FloatLiteral,
   IntegerLiteral,
+  ImageLiteral,
   NilLiteral,
   StringLiteral,
   Tuple,
@@ -446,6 +447,7 @@ enum class CompletionKind {
   CallArg,
   ReturnStmtExpr,
   AfterPound,
+  GenericParams,
 };
 
 /// \brief A single code completion result.
@@ -691,6 +693,7 @@ class CodeCompletionContext {
 public:
   CodeCompletionCache &Cache;
   CompletionKind CodeCompletionKind = CompletionKind::None;
+  bool HasExpectedTypeRelation = false;
 
   CodeCompletionContext(CodeCompletionCache &Cache)
       : Cache(Cache) {}
@@ -701,7 +704,7 @@ public:
   /// \brief Return current code completion results.
   MutableArrayRef<CodeCompletionResult *> takeResults();
 
-  /// \brief Sort code completion results in an implementetion-defined order
+  /// \brief Sort code completion results in an implementation-defined order
   /// in place.
   static void sortCompletionResults(
       MutableArrayRef<CodeCompletionResult *> Results);
@@ -732,7 +735,7 @@ struct SimpleCachingCodeCompletionConsumer : public CodeCompletionConsumer {
                                ArrayRef<RequestedCachedModule> requestedModules,
                                DeclContext *DCForModules) override;
 
-  /// Clients should overrride this method to receive \p Results.
+  /// Clients should override this method to receive \p Results.
   virtual void handleResults(
       MutableArrayRef<CodeCompletionResult *> Results) = 0;
 };
@@ -774,6 +777,28 @@ void copyCodeCompletionResults(CodeCompletionResultSink &targetSink, CodeComplet
 
 } // namespace ide
 } // namespace swift
+
+template <> struct llvm::DenseMapInfo<swift::ide::CodeCompletionKeywordKind> {
+  using Kind = swift::ide::CodeCompletionKeywordKind;
+  static Kind getEmptyKey() { return Kind(~0u); }
+  static Kind getTombstoneKey() { return Kind(~1u); }
+  static unsigned getHashValue(const Kind &Val) { return unsigned(Val); }
+  static bool isEqual(const Kind &LHS, const Kind &RHS) { return LHS == RHS; }
+};
+template <> struct llvm::DenseMapInfo<swift::ide::CodeCompletionLiteralKind> {
+  using Kind = swift::ide::CodeCompletionLiteralKind;
+  static Kind getEmptyKey() { return Kind(~0u); }
+  static Kind getTombstoneKey() { return Kind(~1u); }
+  static unsigned getHashValue(const Kind &Val) { return unsigned(Val); }
+  static bool isEqual(const Kind &LHS, const Kind &RHS) { return LHS == RHS; }
+};
+template <> struct llvm::DenseMapInfo<swift::ide::CodeCompletionDeclKind> {
+  using Kind = swift::ide::CodeCompletionDeclKind;
+  static Kind getEmptyKey() { return Kind(~0u); }
+  static Kind getTombstoneKey() { return Kind(~1u); }
+  static unsigned getHashValue(const Kind &Val) { return unsigned(Val); }
+  static bool isEqual(const Kind &LHS, const Kind &RHS) { return LHS == RHS; }
+};
 
 #endif // SWIFT_IDE_CODE_COMPLETION_H
 

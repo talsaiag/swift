@@ -26,7 +26,7 @@ func test() {
 // RUN: %sourcekitd-test -req=complete.open -pos=7:1 -req-opts=sort.byname=1,hidelowpriority=0,hideunderscores=0 %s -- %s > %t.off
 // RUN: FileCheck -check-prefix=CONTEXT %s < %t.default
 // RUN: FileCheck -check-prefix=NAME %s < %t.off
-// FIXME: rdar://problem/20109989 non-determinisitic sort order
+// FIXME: rdar://problem/20109989 non-deterministic sort order
 // RUN-disabled: diff %t.on %t.default
 // RUN: FileCheck -check-prefix=CONTEXT %s < %t.on
 
@@ -60,13 +60,13 @@ func test2() {
   (#^EXPR_0^#)
 }
 // EXPR: 0
-// EXPR: 0.0
-// EXPR: false
+// EXPR: "abc"
 // EXPR: true
-// EXPR: "text"
-// EXPR: [item]
-// EXPR: [key: value]
-// EXPR: (item, item)
-// EXPR: nil
+// EXPR: false
 // EXPR: [#Color(colorLiteralRed: Float, green: Float, blue: Float, alpha: Float)#]
+// EXPR: [#Image(imageLiteral: String)#]
+// EXPR: [values]
+// EXPR: [key: value]
+// EXPR: (values)
+// EXPR: nil
 // EXPR: foo(a: Int)

@@ -51,7 +51,7 @@ allkeywords1(1, y: 2) // expected-error{{missing argument label 'x:' in call}} {
 
 // If keyword is reserved, make sure to quote it. rdar://problem/21392294
 func reservedLabel(x: Int, `repeat`: Bool) {}
-reservedLabel(1, true) // expected-error{{missing argument label 'repeat:' in call}}{{18-18=`repeat`: }}
+reservedLabel(1, true) // expected-error{{missing argument label 'repeat:' in call}}{{18-18=repeat: }}
 
 // Insert missing keyword before initial backtick. rdar://problem/21392294 part 2
 func reservedExpr(x: Int, y: Int) {}
@@ -312,9 +312,10 @@ trailingclosure2(x: 5) { return 5 }
 
 func trailingclosure3(x x: Int, f: (() -> Int)!) {
   var f = f
-  _ = f
   f = nil
+  _ = f
 }
+
 trailingclosure3(x: 5) { return 5 }
 
 func trailingclosure4(f f: () -> Int) {}

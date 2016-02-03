@@ -2,6 +2,7 @@ add_swift_library(swiftIRGen
   DebugTypeInfo.cpp
   EnumPayload.cpp
   ExtraInhabitants.cpp
+  Fulfillment.cpp
   GenArchetype.cpp
   GenCast.cpp
   GenClangDecl.cpp
@@ -20,6 +21,7 @@ add_swift_library(swiftIRGen
   GenOpaque.cpp
   GenPoly.cpp
   GenProto.cpp
+  GenReflection.cpp
   GenStruct.cpp
   GenTuple.cpp
   GenType.cpp
@@ -29,10 +31,10 @@ add_swift_library(swiftIRGen
   IRGenModule.cpp
   IRGenSIL.cpp
   Linking.cpp
+  LocalTypeData.cpp
   SwiftTargetInfo.cpp
   StructLayout.cpp
   TypeLayoutVerifier.cpp
-  UnimplementedTypeInfo.cpp
   LINK_LIBRARIES
     swiftAST
     swiftLLVMPasses

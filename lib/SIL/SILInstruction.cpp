@@ -2,7 +2,7 @@
 //
 // This source file is part of the Swift.org open source project
 //
-// Copyright (c) 2014 - 2015 Apple Inc. and the Swift project authors
+// Copyright (c) 2014 - 2016 Apple Inc. and the Swift project authors
 // Licensed under Apache License v2.0 with Runtime Library Exception
 //
 // See http://swift.org/LICENSE.txt for license information
@@ -10,7 +10,7 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// This file defines the high-level SILInstruction classes used for  SIL code.
+// This file defines the high-level SILInstruction classes used for SIL code.
 //
 //===----------------------------------------------------------------------===//
 
@@ -35,13 +35,6 @@ using namespace Lowering;
 // Instruction-specific properties on SILValue
 //===----------------------------------------------------------------------===//
 
-Optional<SILLocation> SILValue::getLoc() const {
-  if (auto I = dyn_cast<SILInstruction>(*this)) {
-    return I->getLoc();
-  }
-  return None;
-}
-
 SILLocation SILInstruction::getLoc() const { return Location.getLocation(); }
 
 const SILDebugScope *SILInstruction::getDebugScope() const {
@@ -52,8 +45,8 @@ void SILInstruction::setDebugScope(SILBuilder &B, const SILDebugScope *DS) {
   if (getDebugScope() && getDebugScope()->InlinedCallSite)
     assert(DS->InlinedCallSite && "throwing away inlined scope info");
 
-  assert(DS->InlinedCallSite || DS->SILFn == getFunction() &&
-         "scope of a non-inlined instruction points to different function");
+  assert(DS->getParentFunction() == getFunction() &&
+         "scope belongs to different function");
 
   Location = *B.getOrCreateDebugLocation(getLoc(), DS);
 }
@@ -88,7 +81,7 @@ void llvm::ilist_traits<SILInstruction>::
 transferNodesFromList(llvm::ilist_traits<SILInstruction> &L2,
                       llvm::ilist_iterator<SILInstruction> first,
                       llvm::ilist_iterator<SILInstruction> last) {
-  // If transfering instructions within the same basic block, no reason to
+  // If transferring instructions within the same basic block, no reason to
   // update their parent pointers.
   SILBasicBlock *ThisParent = getContainingBlock();
   if (ThisParent == L2.getContainingBlock()) return;
@@ -160,7 +153,7 @@ void SILInstruction::dropAllReferences() {
   }
 
   // If we have a function ref inst, we need to especially drop its function
-  // argument so that it gets a proper ref decement.
+  // argument so that it gets a proper ref decrement.
   auto *FRI = dyn_cast<FunctionRefInst>(this);
   if (!FRI || !FRI->getReferencedFunction())
     return;
@@ -172,7 +165,7 @@ void SILInstruction::replaceAllUsesWithUndef() {
   SILModule &Mod = getModule();
   while (!use_empty()) {
     Operand *Op = *use_begin();
-    Op->set(SILUndef::get(Op->get().getType(), Mod));
+    Op->set(SILUndef::get(Op->get()->getType(), Mod));
   }
 }
 
@@ -261,6 +254,10 @@ namespace {
       return true;
     }
 
+    bool visitProjectExistentialBoxInst(const ProjectExistentialBoxInst *RHS) {
+      return true;
+    }
+
     bool visitStrongReleaseInst(const StrongReleaseInst *RHS) {
       return true;
     }
@@ -285,6 +282,11 @@ namespace {
     bool visitFunctionRefInst(const FunctionRefInst *RHS) {
       auto *X = cast<FunctionRefInst>(LHS);
       return X->getReferencedFunction() == RHS->getReferencedFunction();
+    }
+
+    bool visitAllocGlobalInst(const AllocGlobalInst *RHS) {
+      auto *X = cast<AllocGlobalInst>(LHS);
+      return X->getReferencedGlobal() == RHS->getReferencedGlobal();
     }
 
     bool visitGlobalAddrInst(const GlobalAddrInst *RHS) {
@@ -803,6 +805,16 @@ bool SILInstruction::mayRelease() const {
     }
     return true;
   }
+  }
+}
+
+bool SILInstruction::mayReleaseOrReadRefCount() const {
+  switch (getKind()) {
+  case ValueKind::IsUniqueInst:
+  case ValueKind::IsUniqueOrPinnedInst:
+    return true;
+  default:
+    return mayRelease();
   }
 }
 

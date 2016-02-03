@@ -2,7 +2,7 @@
 //
 // This source file is part of the Swift.org open source project
 //
-// Copyright (c) 2014 - 2015 Apple Inc. and the Swift project authors
+// Copyright (c) 2014 - 2016 Apple Inc. and the Swift project authors
 // Licensed under Apache License v2.0 with Runtime Library Exception
 //
 // See http://swift.org/LICENSE.txt for license information
@@ -24,7 +24,7 @@ public protocol ApproximateCountableSequenceType : SequenceType {
   var approximateCount: ApproximateCount { get }
 }
 
-/// A collection that provides an efficient way to spilt its index ranges.
+/// A collection that provides an efficient way to split its index ranges.
 public protocol SplittableCollectionType : CollectionType {
   // We need this protocol so that collections with only forward or bidirectional
   // traversals could customize their splitting behavior.
@@ -32,7 +32,7 @@ public protocol SplittableCollectionType : CollectionType {
   // FIXME: all collections with random access should conform to this protocol
   // automatically.
 
-  /// Splits a given range of indicies into a set of disjoint ranges covering
+  /// Splits a given range of indices into a set of disjoint ranges covering
   /// the same elements.
   ///
   /// Complexity: amortized O(1).
@@ -44,7 +44,7 @@ public protocol SplittableCollectionType : CollectionType {
   /// FIXME: a better name.  Users will never want to call this method
   /// directly.
   ///
-  /// FIXME: return an optional for the common case when split() can not
+  /// FIXME: return an optional for the common case when split() cannot
   /// subdivide the range further.
   func split(range: Range<Index>) -> [Range<Index>]
 }
@@ -1303,6 +1303,14 @@ public func transform<C : CollectionType>(c: C)
 //===----------------------------------------------------------------------===//
 
 import StdlibUnittest
+
+// Also import modules which are used by StdlibUnittest internally. This
+// workaround is needed to link all required libraries in case we compile
+// StdlibUnittest with -sil-serialize-all.
+import SwiftPrivate
+#if _runtime(_ObjC)
+import ObjectiveC
+#endif
 
 var t = TestSuite("t")
 

@@ -101,12 +101,11 @@ import Swift
 //    we fill in on instantiation.
 //    The witness table pattern includes extra inhabitant witness
 //    implementations which are used if the instance has extra inhabitants.
-// CHECK: [[DYNAMICSINGLETON_FIELD_NAMES:@.*]] = private unnamed_addr constant [7 x i8] c"value\00\00"
-// CHECK: [[DYNAMICSINGLETON_NAME:@.*]] = private unnamed_addr constant [25 x i8] c"O4enum16DynamicSingleton\00"
-// CHECK: @_TMnO4enum16DynamicSingleton = constant { {{.*}} i32 } {
-// --       2 = enum
-// CHECK:   [[WORD:i64|i32]] 2,
-// CHECK:   i8* getelementptr inbounds ([25 x i8], [25 x i8]* [[DYNAMICSINGLETON_NAME]]
+//    FIXME: Strings should be unnamed_addr. rdar://problem/22674524
+// CHECK: [[DYNAMICSINGLETON_FIELD_NAMES:@.*]] = private constant [7 x i8] c"value\00\00"
+// CHECK: [[DYNAMICSINGLETON_NAME:@.*]] = private constant [25 x i8] c"O4enum16DynamicSingleton\00"
+// CHECK: @_TMnO4enum16DynamicSingleton = constant <{ {{.*}} i32 }> <{
+// CHECK:   [25 x i8]* [[DYNAMICSINGLETON_NAME]]
 // --       One payload
 // CHECK:   i32 1,
 // --       No empty cases
@@ -119,9 +118,9 @@ import Swift
 // CHECK:   i32 3,
 // --       generic parameter vector length; witness table counts
 // CHECK:   i32 1, i32 0
-// CHECK: }
+// CHECK: }>
 
-// CHECK: @_TMPO4enum16DynamicSingleton = global { {{.*}}* } {
+// CHECK: @_TMPO4enum16DynamicSingleton = global <{ {{.*}}* }> <{
 // CHECK:   %swift.type* (%swift.type_pattern*, i8**)* @create_generic_metadata_DynamicSingleton
 // CHECK:   @_TMnO4enum16DynamicSingleton
 // CHECK:   i8* null
@@ -130,10 +129,10 @@ import Swift
 
 // -- No-payload enums have extra inhabitants in
 //    their value witness table.
-// CHECK: @_TWVO4enum10NoPayloads = constant [25 x i8*] [
+// CHECK: @_TWVO4enum10NoPayloads = constant [26 x i8*] [
 // -- ...
 // -- size
-// CHECK:   i8* inttoptr ([[WORD]] 1 to i8*),
+// CHECK:   i8* inttoptr ([[WORD:i32|i64]] 1 to i8*),
 // -- flags                 0x24_0000 - alignment 1, has extra inhabitants and enum witnesses
 // CHECK:   i8* inttoptr ([[WORD]] 2359296 to i8*),
 // -- stride
@@ -148,7 +147,7 @@ import Swift
 
 // -- Single-payload enums take unused extra inhabitants from their payload
 //    as their own.
-// CHECK: @_TWVO4enum19SinglePayloadNested = constant [25 x i8*] [
+// CHECK: @_TWVO4enum19SinglePayloadNested = constant [26 x i8*] [
 // -- ...
 // -- size
 // CHECK:   i8* inttoptr ([[WORD]] 1 to i8*),
@@ -165,13 +164,13 @@ import Swift
 // CHECK: ] 
 
 
-// CHECK: @_TMPO4enum20DynamicSinglePayload = global { {{.*}}* } {
+// CHECK: @_TMPO4enum20DynamicSinglePayload = global <{ {{.*}}* }> <{
 // CHECK:   %swift.type* (%swift.type_pattern*, i8**)* @create_generic_metadata_DynamicSinglePayload
 // CHECK:   i8* null
 // CHECK:   i8* bitcast (void (%swift.opaque*, i32, %swift.type*)* @_TwxsO4enum20DynamicSinglePayload to i8*)
 // CHECK:   i8* bitcast (i32 (%swift.opaque*, %swift.type*)* @_TwxgO4enum20DynamicSinglePayload to i8*)
 
-// CHECK: @_TWVO4enum18MultiPayloadNested = constant [25 x i8*] [
+// CHECK: @_TWVO4enum18MultiPayloadNested = constant [26 x i8*] [
 // CHECK:   i8* inttoptr ([[WORD]] 9 to i8*),
 // CHECK:   i8* inttoptr ([[WORD]] 16 to i8*)
 // CHECK: ]
@@ -2441,8 +2440,10 @@ struct ContainsUnownedObjC {
   unowned let x: C
 }
 // CHECK-LABEL: define {{.*}} @optional_unowned() {{.*}} {
-// CHECK-64:      ret { [[WORD]], [[WORD]] } { [[WORD]] 0, [[WORD]] 2 }
-// CHECK-32:      ret { [[WORD]], [[WORD]] } { [[WORD]] 0, [[WORD]] 1 }
+// CHECK-objc-64:     ret { [[WORD]], [[WORD]], i1 } { [[WORD]] 0, [[WORD]] 0, i1 true }
+// CHECK-native-64:   ret { [[WORD]], [[WORD]] } { [[WORD]] 0, [[WORD]] 2 }
+// CHECK-objc-32:     ret { [[WORD]], [[WORD]], i1 } { [[WORD]] 0, [[WORD]] 0, i1 true }
+// CHECK-native-32:   ret { [[WORD]], [[WORD]] } { [[WORD]] 0, [[WORD]] 1 }
 sil @optional_unowned : $@convention(thin) () -> (Optionable<ContainsUnowned>, Optionable<Optionable<ContainsUnowned>>) {
 entry:
   %a = enum $Optionable<ContainsUnowned>, #Optionable.None!enumelt
@@ -2451,8 +2452,10 @@ entry:
   return %t : $(Optionable<ContainsUnowned>, Optionable<Optionable<ContainsUnowned>>)
 }
 // CHECK-LABEL: define {{.*}} @optional_unowned_objc() {{.*}} {
-// CHECK-64:      ret { [[WORD]], [[WORD]] } { [[WORD]] 0, [[WORD]] 2 }
-// CHECK-32:      ret { [[WORD]], [[WORD]] } { [[WORD]] 0, [[WORD]] 1 }
+// CHECK-objc-64:      ret { [[WORD]], [[WORD]], i1 } { [[WORD]] 0, [[WORD]] 0, i1 true }
+// CHECK-native-64:    ret { [[WORD]], [[WORD]] } { [[WORD]] 0, [[WORD]] 2 }
+// CHECK-objc-32:      ret { [[WORD]], [[WORD]], i1 } { [[WORD]] 0, [[WORD]] 0, i1 true }
+// CHECK-native-32:    ret { [[WORD]], [[WORD]] } { [[WORD]] 0, [[WORD]] 1 }
 sil @optional_unowned_objc : $@convention(thin) () -> (Optionable<ContainsUnownedObjC>, Optionable<Optionable<ContainsUnownedObjC>>) {
 entry:
   %a = enum $Optionable<ContainsUnownedObjC>, #Optionable.None!enumelt
@@ -2535,7 +2538,7 @@ enum Target {
 
 // Ensure that we generate IR that does not run into verification
 // issues for the case where there is a single tag bit and extra
-// enhabitants.
+// inhabitants.
 // CHECK-LABEL: define void @generate_conditional_branch
 sil @generate_conditional_branch : $@convention(thin) (@owned Target) -> () {
 bb0(%0 : $Target):
@@ -2613,7 +2616,7 @@ bb4:
 // CHECK: define private %swift.type* @create_generic_metadata_DynamicSinglePayload(%swift.type_pattern*, i8**) {{.*}} {
 // CHECK:   call void @swift_initEnumValueWitnessTableSinglePayload
 
-// CHECK-64-LABEL: define linkonce_odr hidden void @_TwxsV4enum17StructWithWeakVar(%swift.opaque* %dest, i32 %index, %swift.type* %Self)
+// CHECK-64-LABEL: define linkonce_odr hidden void @_TwxsV4enum17StructWithWeakVar(%swift.opaque* %dest, i32 %index, %swift.type* %StructWithWeakVar)
 // -- TODO: some pointless masking here.
 // -- TODO: should use EnumPayload word-chunking.
 // CHECK-64:         %1 = zext i32 %index to i128

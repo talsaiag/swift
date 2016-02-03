@@ -2,7 +2,7 @@
 //
 // This source file is part of the Swift.org open source project
 //
-// Copyright (c) 2014 - 2015 Apple Inc. and the Swift project authors
+// Copyright (c) 2014 - 2016 Apple Inc. and the Swift project authors
 // Licensed under Apache License v2.0 with Runtime Library Exception
 //
 // See http://swift.org/LICENSE.txt for license information
@@ -22,7 +22,6 @@
 #include <cstring>
 #include <new>
 #include <string>
-#include <regex>
 #include <dlfcn.h>
 
 #if SWIFT_OBJC_INTEROP
@@ -300,6 +299,38 @@ AnyReturn swift_MagicMirrorData_objcValue(HeapObject *owner,
 #pragma clang diagnostic pop
 
 extern "C"
+const char *swift_OpaqueSummary(const Metadata *T) {
+  switch (T->getKind()) {
+    case MetadataKind::Class:
+    case MetadataKind::Struct:
+    case MetadataKind::Enum:
+    case MetadataKind::Optional:
+    case MetadataKind::Metatype:
+      return nullptr;
+    case MetadataKind::Opaque:
+      return "(Opaque Value)";
+    case MetadataKind::Tuple:
+      return "(Tuple)";
+    case MetadataKind::Function:
+      return "(Function)";
+    case MetadataKind::Existential:
+      return "(Existential)";
+    case MetadataKind::ObjCClassWrapper:
+      return "(Objective-C Class Wrapper)";
+    case MetadataKind::ExistentialMetatype:
+      return "(Existential Metatype)";
+    case MetadataKind::ForeignClass:
+      return "(Foreign Class)";
+    case MetadataKind::HeapLocalVariable:
+      return "(Heap Local Variable)";
+    case MetadataKind::HeapGenericLocalVariable:
+      return "(Heap Generic Local Variable)";
+    case MetadataKind::ErrorObject:
+      return "(ErrorType Object)";
+  }
+}
+
+extern "C"
 void swift_MagicMirrorData_summary(const Metadata *T, String *result) {
   switch (T->getKind()) {
     case MetadataKind::Class:
@@ -309,6 +340,7 @@ void swift_MagicMirrorData_summary(const Metadata *T, String *result) {
       new (result) String("(Struct)");
       break;
     case MetadataKind::Enum:
+    case MetadataKind::Optional:
       new (result) String("(Enum Value)");
       break;
     case MetadataKind::Opaque:
@@ -381,6 +413,7 @@ recur:
   case MetadataKind::Class:
   case MetadataKind::Opaque:
   case MetadataKind::Enum:
+  case MetadataKind::Optional:
   case MetadataKind::Function:
   case MetadataKind::Metatype:
     break;
@@ -573,7 +606,12 @@ static void getEnumMirrorInfo(const OpaqueValue *value,
 
   unsigned payloadCases = Description.getNumPayloadCases();
 
-  unsigned tag = type->vw_getEnumTag(value);
+  // 'tag' is in the range [-ElementsWithPayload..ElementsWithNoPayload-1].
+  int tag = type->vw_getEnumTag(value);
+
+  // Convert resilient tag index to fragile tag index.
+  tag += payloadCases;
+
   const Metadata *payloadType = nullptr;
   bool indirect = false;
 
@@ -596,7 +634,7 @@ const char *swift_EnumMirror_caseName(HeapObject *owner,
                                       const OpaqueValue *value,
                                       const Metadata *type) {
   if (!isEnumReflectable(type))
-    return NULL;
+    return nullptr;
 
   const auto Enum = static_cast<const EnumMetadata *>(type);
   const auto &Description = Enum->Description->Enum;
@@ -604,6 +642,31 @@ const char *swift_EnumMirror_caseName(HeapObject *owner,
   unsigned tag;
   getEnumMirrorInfo(value, type, &tag, nullptr, nullptr);
   return getFieldName(Description.CaseNames, tag);
+}
+
+extern "C"
+const char *swift_EnumCaseName(OpaqueValue *value, const Metadata *type) {
+  // Build a magic mirror. Unconditionally destroy the value at the end.
+  const _ReflectableWitnessTable *witness;
+  const Metadata *mirrorType;
+  const OpaqueValue *cMirrorValue;
+  std::tie(witness, mirrorType, cMirrorValue) = getReflectableConformance(type, value);
+  
+  OpaqueValue *mirrorValue = const_cast<OpaqueValue*>(cMirrorValue);
+  Mirror mirror;
+
+  if (witness) {
+    mirror = witness->getMirror(mirrorValue, mirrorType);
+  } else {
+    bool take = mirrorValue == value;
+    ::new (&mirror) MagicMirror(mirrorValue, mirrorType, take);
+  }
+
+  MagicMirror *theMirror = reinterpret_cast<MagicMirror *>(&mirror);
+  MagicMirrorData data = theMirror->Data;
+  const char *result = swift_EnumMirror_caseName(data.Owner, data.Value, data.Type);
+  type->vw_destroy(value);
+  return result;
 }
 
 extern "C"
@@ -658,18 +721,6 @@ StringMirrorTuple swift_EnumMirror_subscript(intptr_t i,
 }
   
 // -- Class destructuring.
-static bool classHasSuperclass(const ClassMetadata *c) {
-#if SWIFT_OBJC_INTEROP
-  // A class does not have a superclass if its ObjC superclass is the
-  // "SwiftObject" root class.
-  return c->SuperClass
-    && (Class)c->SuperClass != NSClassFromString(@"SwiftObject");
-#else
-  // In non-objc mode, the test is just if it has a non-null superclass.
-  return c->SuperClass != nullptr;
-#endif
-}
-
 static Mirror getMirrorForSuperclass(const ClassMetadata *sup,
                                      HeapObject *owner,
                                      const OpaqueValue *value,
@@ -1149,6 +1200,7 @@ getImplementationForType(const Metadata *T, const OpaqueValue *Value) {
         T, &StructMirrorMetadata, &StructMirrorWitnessTable);
       
   case MetadataKind::Enum:
+  case MetadataKind::Optional:
     return std::make_tuple(
         T, &EnumMirrorMetadata, &EnumMirrorWitnessTable);
 
@@ -1263,4 +1315,18 @@ MirrorReturn swift::swift_reflectAny(OpaqueValue *value, const Metadata *T) {
   if (!take)
     T->vw_destroy(value);
   return MirrorReturn(result);
+}
+
+// NB: This function is not used directly in the Swift codebase, but is
+// exported for Xcode support. Please coordinate before changing.
+extern "C" void swift_stdlib_demangleName(const char *mangledName,
+                                          size_t mangledNameLength,
+                                          String *demangledName) {
+  auto options = Demangle::DemangleOptions();
+  options.DisplayDebuggerGeneratedModule = false;
+  auto result =
+      Demangle::demangleSymbolAsString(mangledName,
+                                       mangledNameLength,
+                                       options);
+  new (demangledName) String(result.data(), result.size());
 }
